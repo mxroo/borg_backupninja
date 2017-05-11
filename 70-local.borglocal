@@ -1,0 +1,138 @@
+######################################################
+## local drive section
+## define the local drive you're backup up to here
+[localdrive]
+#device_name = /dev/sdc1
+device_uuid = 67276f96-77ad-4bd4-ae1f-64f724f2f70b
+filesystem_type = ext4
+
+##
+## This is an example borgbackup configuration file.
+##
+## Here you can find all the possible borgbackup options, details of
+## what the options provide and possible settings. The defaults are set
+## as the commented out option, uncomment and change when
+## necessary. Options which are uncommented in this example do not have
+## defaults, and the settings provided are recommended.
+## 
+## The defaults are useful in most cases, just make sure to configure the 
+## destination host and user.
+##
+
+## default is 0, but set to 19 if you want to lower the priority.
+## an example setting would be:
+## nicelevel = 19
+##
+## Default
+# nicelevel = 0
+
+## default is yes. set to no to skip the test if the remote host is alive
+##
+## Default:
+# testconnect = no
+
+######################################################
+## source section
+## (where the files to be backed up are coming from)
+
+[source]
+
+## how many days, weeks and months of data to keep
+## for more info see : borg prune -h
+##
+## Default:
+# keepdaily = 7
+# keepweekly = 4
+# keepmonthly = -1
+
+## A few notes about includes and excludes:
+## 1. include, exclude statements support globbing with '*'
+## 2. Symlinks are not dereferenced. Moreover, an include line whose path
+##    contains, at any level, a symlink to a directory, will only have the
+##    symlink backed-up, not the target directory's content. Yes, you have to
+##    dereference yourself the symlinks, or to use 'mount --bind' instead.
+##    Example: let's say /home is a symlink to /mnt/crypt/home ; the following
+##    line will only backup a "/home" symlink ; neither /home/user nor
+##    /home/user/Mail will be backed-up :
+##      include = /home/user/Mail
+##    A workaround is to 'mount --bind /mnt/crypt/home /home' ; another one is to
+##    write :
+##      include = /mnt/crypt/home/user/Mail
+## 3. All the excludes come after all the includes. The order is not otherwise
+##    taken into account.
+
+## files to include in the backup
+include = /etc
+include = /home
+include = /root
+include = /var/log
+include = /var/www
+include = /var/backups
+include = /var/lib/samba
+include = /var/spool/cron/crontabs
+include = /usr/local/bin
+include = /usr/local/sbin
+include = /usr/lib/nagios/plugins
+include = /mnt
+
+# files to exclude from the backup
+# (supports globbing with '*')
+exclude = /home/*/.gnupg
+exclude = /home/samba/software/*
+exclude = /mnt/medea-lamamaproductionsvideo/*
+exclude = /mnt/medea-software/*
+exclude = /mnt/usb/*
+exclude = /mnt/usb2/*
+exclude = /mnt/borg_usb/*
+exclude = /mnt/medea-archivebackup/clytemnestra/*
+
+
+######################################################
+## destination section
+## (where the files are copied to)
+
+[dest]
+
+## put the backups under this directory, this must be set!
+## an example setting would be:
+## directory = /backups
+## 
+## Default:
+directory = /mnt/borg_usb/
+
+## the machine which will receive the backups.
+## an example setting would be:
+## host = backuphost
+##
+## Default
+host = localhost
+
+## make the files owned by this user. you must be able to
+## `su -c "ssh backupuser@backhost"` without specifying a password.
+## an example setting would be:
+## user = backupuser
+##
+## Default:
+#user = palantetech-sync
+
+## archive name, should be unique every day.
+## Format tags available :
+## {now}, {utcnow}, {fqdn}, {hostname}, {user}, {pid}
+## for more info see : borg create -h
+##
+## Default:
+archive = {hostname}-{now:%Y-%m-%dT%H:%M}
+
+
+## compression algorithm
+## can be "none", "lz4", "zlib", "zlib,0..zlib,9", "lzma", "lzma,0..lzma,9".
+## - "none" stands for "no compression"
+## - "lz4" is super fast, but low compression
+## - "zlib" is less fast, but higher compression
+## - "lzma" is even slower, even higher compression
+## for more info see : borg create -h
+##
+## Default:
+# compression = lz4
+
+passphrase = PASSPHRASE

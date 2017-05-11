@@ -1,0 +1,145 @@
+# -*- mode: sh; sh-basic-offset: 3; indent-tabs-mode: nil; -*-
+# vim: set filetype=sh sw=3 sts=3 expandtab autoindent:
+#
+# borg handler script for backupninja
+# requires borgbackup
+#
+# Guillaume Subiron, Sysnove, 2016
+#
+# Copyright 2016 Guillaume Subiron <guillaume@sysnove.fr>
+#
+# This work is free. You can redistribute it and/or modify it under the
+# terms of the Do What The Fuck You Want To Public License, Version 2,
+# as published by Sam Hocevar. See the http://www.wtfpl.net/ file for more details.
+#
+#
+
+export BORG_RELOCATED_REPO_ACCESS_IS_OK=yes
+
+### GET CONFIG ###
+
+getconf testconnect yes
+getconf nicelevel 0
+
+setsection source
+getconf keepdaily 7
+getconf keepweekly 4
+getconf keepmonthly -1
+getconf include
+getconf exclude
+
+setsection dest
+getconf user
+getconf host
+getconf directory
+# strip trailing /
+directory=${directory%/}
+getconf archive {now:%Y-%m-%d}
+getconf compression lz4
+getconf passphrase
+
+
+### CHECK CONFIG ###
+
+# check the connection at the source and destination
+[ -n "$test" ] || test=0
+if [ "$host" != "localhost" ] && ([ "$testconnect" = "yes" ] || [ "${test}" -eq 1 ]); then
+   debug "ssh -o PasswordAuthentication=no $host -l $user 'echo -n 1'"
+   local ret=`ssh -o PasswordAuthentication=no $host -l $user 'echo -n host is alive'`
+   if echo $ret | grep "host is alive"; then
+      debug "Connected to $host as $user successfully"
+   else
+      fatal "Can't connect to $host as $user."
+   fi
+fi
+
+# destination specific checks
+[ "$directory" != "" ] || fatal "Destination directory not set"
+if [ "$host" != "localhost" ]; then
+  execstr_repository="$user@$host:$directory"
+else
+  execstr_repository="$directory"
+fi
+execstr_archive="$archive"
+
+### INIT IF NEEDED ###
+
+if [ "$passphrase" != "" ]; then
+  export BORG_PASSPHRASE="$passphrase"
+  initstr="borg init $execstr_repository"
+else
+  initstr="borg init --encryption=none $execstr_repository"
+fi
+
+debug "$initstr"
+
+if [ $test = 0 ]; then
+    output="`su -c "$initstr" 2>&1`"
+    if [ $? = 2 ]; then
+       debug $output
+       info "Repository was already initialized"
+    else
+       warning $output
+       warning "Repository has been initialized"
+    fi
+fi
+
+### EXECUTE ###
+
+execstr="borg create --stats --compression $compression"
+
+set -o noglob
+
+# includes
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+for i in $include; do
+   includes="${includes} '$i'"
+done
+IFS=$SAVEIFS
+
+# excludes
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+for i in $exclude; do
+   excludes="${excludes} --exclude '$i'"
+done
+IFS=$SAVEIFS
+
+set +o noglob
+
+# include client-part and server-part
+execstr="${execstr} ${excludes} $execstr_repository::$execstr_archive ${includes}"
+debug "$execstr"
+
+if [ $test = 0 ]; then
+   output=`nice -n $nicelevel su -c "$execstr" 2>&1`
+   if [ $? = 0 ]; then
+      debug $output
+      info "Successfully finished backing up source $label"
+   else
+      error $output
+      fatal "Failed backuping up source $label"
+   fi
+fi
+
+### REMOVE OLD BACKUPS ###
+
+# borg prune
+prunestr="borg prune --keep-daily $keepdaily --keep-weekly $keepweekly --keep-monthly $keepmonthly $execstr_repository"
+debug "$prunestr"
+
+if [ $test = 0 ]; then
+   output="`su -c "$prunestr" 2>&1`"
+   if [ $? = 0 ]; then
+      debug $output
+      info "Removing old backups succeeded."
+   else
+      warning $output
+      warning "Failed removing old backups."
+   fi
+fi
+
+unset BORG_PASSPHRASE
+
+return 0
